@@ -1,22 +1,37 @@
 WITH staging_train AS (
+    -- 1. Traemos los datos estandarizados de la capa staging
     SELECT * FROM {{ ref('stg_house_prices__train') }}
-)
+),
 
-SELECT 
-    * EXCEPT(garageyrblt), -- Excluimos la columna original para reescribirla
-    
+limpieza_y_deduplicacion AS (
+    SELECT 
+        * EXCEPT(garageyrblt), 
+        
     -- Corrección del "Cero Lógico" en fechas
     -- Si el año es 0 (porque no tiene garaje), asignamos el año de construcción de la casa
     -- para no destruir los pesos matemáticos del modelo de Machine Learning.
-    CASE 
-        WHEN garageyrblt = 0 THEN year_built 
-        ELSE garageyrblt 
-    END AS garage_yr_blt
+        CASE 
+            WHEN garageyrblt = 0 THEN year_built 
+            ELSE garageyrblt 
+        END AS garage_yr_blt
+        
+    FROM staging_train
+    
+    -- 2. DEDUPLICACIÓN LÓGICA: Garantizamos que cada casa aparezca una sola vez
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY property_id 
+        ORDER BY 
+            -- Priorizamos el registro que tenga datos de barrio, y en caso de empate, el más actualizado
+            CASE WHEN neighborhood IS NOT NULL THEN 1 ELSE 0 END DESC,
+            year_built DESC
+    ) = 1
+)
 
-FROM staging_train
+SELECT *
+FROM limpieza_y_deduplicacion
 WHERE 
     -- 1. Regla de negocio original: Eliminar outliers masivos de superficie
-    gr_liv_area <= 4000 
+    gr_liv_area <= 4000
     
     -- 2. Filtro de nicho de mercado: Excluir zonas no residenciales (C = Comercial)
     -- Los 10 registros que detectaste distorsionan el precio residencial.
