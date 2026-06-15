@@ -1,44 +1,47 @@
 {% set columnas_na = [
-    'PoolQC', 'MiscFeature', 'Alley', 'Fence', 'FireplaceQu', 
-    'GarageType', 'GarageFinish', 'GarageQual', 'GarageCond', 
-    'BsmtCond', 'BsmtExposure', 'BsmtQual', 'BsmtFinType1', 'BsmtFinType2', 'MasVnrType'
+    ('PoolQC', 'pool_qc'), ('MiscFeature', 'misc_feature'), ('Alley', 'alley'), 
+    ('Fence', 'fence'), ('FireplaceQu', 'fireplace_qu'), ('GarageType', 'garage_type'), 
+    ('GarageFinish', 'garage_finish'), ('GarageQual', 'garage_qual'), ('GarageCond', 'garage_cond'), 
+    ('BsmtCond', 'bsmt_cond'), ('BsmtExposure', 'bsmt_exposure'), ('BsmtQual', 'bsmt_qual'), 
+    ('BsmtFinType1', 'bsmt_fin_type1'), ('BsmtFinType2', 'bsmt_fin_type2'), ('MasVnrType', 'mas_vnr_type')
 ] %}
 
 -- Creamos la lista para el Grupo "Cero Lógico"
 {% set columnas_zero = [
-    'GarageCars', 'GarageArea', 'BsmtFullBath', 'BsmtHalfBath', 
-    'BsmtUnfSF', 'BsmtFinSF1', 'BsmtFinSF2', 'TotalBsmtSF', 
-    'MasVnrArea', 'GarageYrBlt'
+    ('GarageCars', 'garage_cars'), ('GarageArea', 'garage_area'), ('BsmtFullBath', 'bsmt_full_bath'), 
+    ('BsmtHalfBath', 'bsmt_half_bath'), ('BsmtUnfSF', 'bsmt_unf_sf'), ('BsmtFinSF1', 'bsmt_fin_sf1'), 
+    ('BsmtFinSF2', 'bsmt_fin_sf2'), ('TotalBsmtSF', 'total_bsmt_sf'), ('MasVnrArea', 'mas_vnr_area'), 
+    ('GarageYrBlt', 'garage_yr_blt')
 ] %}
 
 -- Grupo "Moda General" para variables categóricas con nulos esporádicos
 {% set columnas_moda = [
-    'Electrical', 'MSZoning', 'Utilities', 'Exterior1st', 
-    'Exterior2nd', 'KitchenQual', 'Functional', 'SaleType'
+    ('Electrical', 'electrical'), ('MSZoning', 'ms_zoning'), ('Utilities', 'utilities'), 
+    ('Exterior1st', 'exterior1st'), ('Exterior2nd', 'exterior2nd'), ('KitchenQual', 'kitchen_qual'), 
+    ('Functional', 'functional'), ('SaleType', 'sale_type')
 ] %}
 
 WITH raw_source AS (
-    SELECT * FROM {{ source('bronze_raw', 'house_prices_test') }}
+    SELECT * FROM {{ source('bronze_raw', 'house_prices_train') }}
 ),
 
 -- Calculamos la Moda General (el valor más frecuente ignorando nulos) para cada columna
 global_modes AS (
     SELECT
-        {% for col in columnas_moda %}
+        {% for col_src, col_alias in columnas_moda %}
         (
-            SELECT {{ col }} 
+            SELECT {{ col_src }} 
             FROM raw_source 
-            WHERE {{ col }} IS NOT NULL 
-            GROUP BY {{ col }} 
+            WHERE {{ col_src }} IS NOT NULL 
+            GROUP BY {{ col_src }} 
             ORDER BY COUNT(*) DESC 
             LIMIT 1
-        ) AS mode_{{ col | lower }}{% if not loop.last %},{% endif %}
+        ) AS mode_{{ col_alias }}{% if not loop.last %},{% endif %}
         {% endfor %}
 )
 
 SELECT
-    -- 1. Columnas sin modificación
-    -- 1. Columnas sin modificación (LIMPIO DE DUPLICADOS)
+    -- 1. Columnas sin modificación (LIMPIO DE DUPLICADOS)s.Id AS property_id,
     s.Id AS property_id,
     s.MSSubClass AS mssub_class,
     s.LotArea AS lot_area,
@@ -83,27 +86,31 @@ SELECT
     s.YrSold AS yr_sold,
     s.SaleCondition AS sale_condition,
     --s.SalePrice AS sale_price,
-    -- s.SalePrice AS sale_price_usd, (Comentado en Test, dejado en Train)
+
+    -- ALERTA: Busca las filas de los pisos y cámbialas manualmente para que empiecen con letras:
+    `1stFlrSF` AS first_flr_sf,
+    `2ndFlrSF` AS second_flr_sf,
+    `3SsnPorch` AS three_ssn_porch,
     
-    -- 2. Imputación Avanzada: LotFrontage (Mediana por Barrio)
+    -- 2. Imputación Avanzada: lot_frontage (Mediana por Barrio)
     COALESCE(
         SAFE_CAST(s.LotFrontage AS FLOAT64),
         PERCENTILE_CONT(SAFE_CAST(s.LotFrontage AS FLOAT64), 0.5) OVER (PARTITION BY s.Neighborhood)
     ) AS lot_frontage,
-
-    -- 3. Imputación por Moda General (CORREGIDO: convertimos texto 'NA' a nulo primero)
-    {% for col in columnas_moda %}
-    COALESCE(NULLIF(CAST(s.{{ col }} AS STRING), 'NA'), m.mode_{{ col | lower }}) AS {{ col | lower }},
+    
+-- 3. Imputación por Moda General 
+    {% for col_src, col_alias in columnas_moda %}
+    COALESCE(NULLIF(CAST(s.{{ col_src }} AS STRING), 'NA'), m.mode_{{ col_alias }}) AS {{ col_alias }},
     {% endfor %}
 
     -- 4. Grupo "El Vacío es una Categoría"
-    {% for col in columnas_na %}
-    COALESCE(NULLIF(CAST(s.{{ col }} AS STRING), 'NA'), 'None') AS {{ col | lower }},
+    {% for col_src, col_alias in columnas_na %}
+    COALESCE(NULLIF(CAST(s.{{ col_src }} AS STRING), 'NA'), 'None') AS {{ col_alias }},
     {% endfor %}
 
     -- 5. Grupo "El Vacío es un Cero Lógico"
-    {% for col in columnas_zero %}
-    COALESCE(SAFE_CAST(s.{{ col }} AS INT64), 0) AS {{ col | lower }}{% if not loop.last %},{% endif %}
+    {% for col_src, col_alias in columnas_zero %}
+    COALESCE(SAFE_CAST(s.{{ col_src }} AS INT64), 0) AS {{ col_alias }}{% if not loop.last %},{% endif %}
     {% endfor %}
 
 FROM raw_source AS s

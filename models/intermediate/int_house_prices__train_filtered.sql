@@ -5,14 +5,14 @@ WITH staging_train AS (
 
 limpieza_y_deduplicacion AS (
     SELECT 
-        * EXCEPT(garageyrblt), 
+        * EXCEPT(garage_yr_blt), 
         
     -- Corrección del "Cero Lógico" en fechas
     -- Si el año es 0 (porque no tiene garaje), asignamos el año de construcción de la casa
     -- para no destruir los pesos matemáticos del modelo de Machine Learning.
         CASE 
-            WHEN garageyrblt = 0 THEN year_built 
-            ELSE garageyrblt 
+            WHEN garage_yr_blt = 0 THEN year_built 
+            ELSE garage_yr_blt 
         END AS garage_yr_blt
         
     FROM staging_train
@@ -35,4 +35,4 @@ WHERE
     
     -- 2. Filtro de nicho de mercado: Excluir zonas no residenciales (C = Comercial)
     -- Los 10 registros que detectaste distorsionan el precio residencial.
-    AND mszoning != 'C (all)'
+    AND ms_zoning != 'C (all)'
