@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: bronze_raw
+    description: "Datos crudos importados de Kaggle"
+    tables:
+      - name: house_prices_train
+      - name: house_prices_test
