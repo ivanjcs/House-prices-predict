@@ -10,8 +10,21 @@ SELECT
         wood_deck_sf, open_porch_sf, enclosed_porch, three_ssn_porch, screen_porch,
         full_bath, half_bath, bsmt_full_bath, bsmt_half_bath,
         condition1, condition2, mo_sold,
-        -- Exclusiones de Seguridad (Disfraces)
-        ms_zoning, roof_matl
+
+        -- [Exclusiones definidas por la Auditoria Visual] --------------
+
+        -- Exclusiones por varianza cercana a cero
+        low_qual_fin_sf, misc_val,
+
+        -- Exclusiones por imbalances extremos sin poder predictivo
+        street, utilities, pool_qc,
+
+        -- Exclusiones por Alta correlación (Multicolinealidad)
+        bsmt_cond, bsmt_fin_type1, exterior2nd, garage_cond, 
+        garage_qual, mssub_class, tot_rms_abv_grd, ms_zoning,
+
+        -- Exclusion de variables crudas que vamos a binarizar/agrupar ahora
+        roof_matl, heating, central_air, kitchen_abv_gr, electrical, misc_feature
     ),
 
     -- [ DISFRACES DE SEGURIDAD CATEGÓRICA ] ---------------------------------
@@ -47,8 +60,32 @@ SELECT
     CASE WHEN mo_sold BETWEEN 4 AND 7 THEN 1 ELSE 0 END AS es_temporada_alta,
 
     (enclosed_porch + three_ssn_porch + screen_porch) AS total_living_porch,
-    (wood_deck_sf + open_porch_sf) AS total_outdoor_deck
+    (wood_deck_sf + open_porch_sf) AS total_outdoor_deck,
 
+
+    -- [ REGLAS DEFINIDAS por (Auditoria Visual )] ---------------------------
+    
+    -- Imbalance: Binarización
+    -- Si es el material estándar (CompShg) es 1, cualquier otra rareza es 0
+    CASE WHEN roof_matl = 'CompShg' THEN 1 ELSE 0 END AS has_standard_roof,
+    
+    -- Si es calefacción a gas estándar (GasA) es 1, otro es 0
+    CASE WHEN heating = 'GasA' THEN 1 ELSE 0 END AS has_gas_heating,
+    
+    -- CentralAir ya es Y/N, lo pasamos a 1/0
+    CASE WHEN CAST(central_air AS STRING) IN ('Y', 'true', 'TRUE') THEN 1 ELSE 0 END AS has_central_air,
+    
+    -- Cocinas: 1 es lo normal, más de 1 es raro/multifamiliar
+    CASE WHEN kitchen_abv_gr = 1 THEN 1 ELSE 0 END AS is_single_kitchen,
+
+    -- Imbalance: Agrupación (Binning)
+    
+    -- Sistema eléctrico: 1 si es estándar (SBrkr), 0 si es antiguo/peligroso
+    CASE WHEN electrical = 'SBrkr' THEN 1 ELSE 0 END AS has_standard_electrical,    
+
+    -- MiscFeature: Separamos las casas que tienen un rasgo raro (Shed, etc) de las que no
+    -- Ojo aquí con los valores nulos que vienen de la capa bronce
+    CASE WHEN COALESCE(misc_feature, 'None') = 'None' THEN 0 ELSE 1 END AS has_misc_feature,
     -- NOTA CRUCIAL: No se incluye LOG(sale_price) porque test.csv no tiene precio.
 
 FROM test_data
