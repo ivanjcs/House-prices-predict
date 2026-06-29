@@ -22,7 +22,7 @@
 ] %}
 
 WITH raw_source AS (
-    SELECT * FROM {{ source('bronze_raw', 'house_prices_train') }}
+    SELECT * FROM {{ source('bronze_raw', 'house_prices_test') }}
 ),
 
 -- Calculamos la Moda General (el valor más frecuente ignorando nulos) para cada columna

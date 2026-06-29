@@ -25,15 +25,11 @@ SELECT
 
         -- Exclusion de variables crudas que vamos a binarizar/agrupar ahora
         roof_matl, heating, central_air, kitchen_abv_gr, electrical, misc_feature,
+
         exter_qual, exter_cond, bsmt_qual, heating_qc, kitchen_qual, fireplace_qu, 
         functional, bsmt_fin_type2,
         bsmt_exposure, lot_shape, garage_finish, paved_drive, land_slope, alley
     ),
-
-    -- [ DISFRACES DE SEGURIDAD CATEGÓRICA ] ---------------------------------
-    CASE WHEN ms_zoning = 'C (all)' THEN 'RL' ELSE ms_zoning END AS ms_zoning,
-    CASE WHEN roof_matl = 'ClyTile' THEN 'CompShg' ELSE roof_matl END AS roof_matl,
-
     -- [ Feature Engineering ] ------------
     COALESCE((bsmt_fin_sf1 + bsmt_fin_sf2) / NULLIF(total_bsmt_sf, 0), 0) AS porcentaje_sotano_terminado,
     SAFE_DIVIDE(gr_liv_area, lot_area) AS lot_coverage_pct,
@@ -42,10 +38,17 @@ SELECT
     CASE WHEN mas_vnr_area > 0 THEN 1 ELSE 0 END AS has_masonry,
     (yr_sold - year_built) AS house_age,
     (yr_sold - year_remod_add) AS years_since_remodel,
-    CASE WHEN year_built != year_remod_add THEN 1 ELSE 0 END AS has_been_remodified,
+    CASE WHEN year_built != year_remod_add THEN 1 ELSE 0 END AS has_been_remodeled,
     
+    (wood_deck_sf + open_porch_sf + enclosed_porch + three_ssn_porch + screen_porch) AS total_outdoor_space,
+    
+    CASE 
+        WHEN (wood_deck_sf + open_porch_sf + enclosed_porch + three_ssn_porch + screen_porch) > 0 THEN 1 
+        ELSE 0 
+    END AS has_outdoor_space,
+
     (full_bath + (0.5 * half_bath) + bsmt_full_bath + (0.5 * bsmt_half_bath)) AS total_bathrooms,
-    
+
     CASE 
         WHEN condition1 IN ('Artery', 'Feedr', 'RRNn', 'RRAn', 'RRNe', 'RRAe') 
           OR condition2 IN ('Artery', 'Feedr', 'RRNn', 'RRAn', 'RRNe', 'RRAe') THEN 1 

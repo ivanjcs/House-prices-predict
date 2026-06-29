@@ -43,7 +43,10 @@ SELECT
         
         exter_qual, exter_cond, bsmt_qual, heating_qc, kitchen_qual, fireplace_qu, 
         functional, bsmt_fin_type2,
-        bsmt_exposure, lot_shape, garage_finish, paved_drive, land_slope, alley
+        bsmt_exposure, lot_shape, garage_finish, paved_drive, land_slope, alley,
+
+        -----------
+        sale_price
     ),
     ------------------------------------------------------------------------------
 
